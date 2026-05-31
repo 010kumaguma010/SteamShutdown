@@ -6,6 +6,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Net.Http;
+using System.Threading;
 using System.Windows.Forms;
 
 namespace SteamShutdown
@@ -42,34 +43,27 @@ namespace SteamShutdown
 
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
+            SynchronizationContext.SetSynchronizationContext(new WindowsFormsSynchronizationContext());
 
             var applicationContext = new CustomApplicationContext();
             Application.Run(applicationContext);
         }
 
+        private static Mutex _singleInstanceMutex;
+
         // IPC: https://gorillacoding.wordpress.com/2013/02/03/using-wcf-for-inter-process-communication/
         private static bool EnsureSingleInstance()
         {
-            bool isAlreadyRunning = IsAlreadyRunning();
-
-            if (isAlreadyRunning)
+            _singleInstanceMutex = new Mutex(true, "Global\\SteamShutdown_SingleInstance", out bool createdNew);
+            if (!createdNew)
             {
+                _singleInstanceMutex.Dispose();
+                _singleInstanceMutex = null;
                 RPC.ShowAnInstanceIsRunning();
+                return false;
             }
-            else
-            {
-                RPC.StartServer();
-            }
-
-            return !isAlreadyRunning;
-        }
-
-        private static bool IsAlreadyRunning()
-        {
-            // string appProcessName = Path.GetFileNameWithoutExtension(System.Windows.Forms.Application.ExecutablePath);
-            string appProcessName = Process.GetCurrentProcess().ProcessName;
-            Process[] RunningProcesses = Process.GetProcessesByName(appProcessName);
-            return RunningProcesses.Length == 2;
+            RPC.StartServer();
+            return true;
         }
 
         private static void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
@@ -78,7 +72,7 @@ namespace SteamShutdown
             File.AppendAllText(path, DateTime.Now + ": " + e.ExceptionObject.ToString() + Environment.NewLine);
 
             MessageBox.Show("Please send me the log file on GitHub or via E-Mail (Andreas.D.Korb@gmail.com)" + Environment.NewLine +
-                "You find the log file on your Dekstop.", "An Error occured");
+                "You find the log file on your Desktop.", "An Error occured");
         }
 
         private static bool IsUpdateAvailable()

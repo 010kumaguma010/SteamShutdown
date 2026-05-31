@@ -14,6 +14,7 @@
             return Name;
         }
 
-        public static Action[] GetAllActions => new Action[] { new Shutdown(), new Hibernation(), new Sleep() };
+        private static readonly Action[] _allActions = new Action[] { new Shutdown(), new Hibernation(), new Sleep() };
+        public static Action[] GetAllActions => _allActions;
     }
 }

@@ -39,7 +39,10 @@ namespace SteamShutdown
                 bool doShutdown = SteamShutdown.WatchedGames.All(x => !x.IsDownloading);
 
                 if (doShutdown)
+                {
+                    SteamShutdown.WatchedGames.Clear();
                     Shutdown();
+                }
             }
 
             if (e.AppInfo.IsDownloading && !SteamShutdown.WatchedGames.Contains(e.AppInfo))
@@ -132,25 +135,28 @@ namespace SteamShutdown
             if (clickAction != null)
                 item.Click += (o, e) => clickAction(o, e);
 
-            if (isChecked)
-                ((ToolStripMenuItem)item).Checked = true;
+            if (isChecked && item is ToolStripMenuItem menuItem)
+                menuItem.Checked = true;
 
             return item;
         }
+
+        private System.Timers.Timer _shutdownTimer;
 
         private void Shutdown()
         {
 #if DEBUG
             MessageBox.Show(SteamShutdown.ActiveMode.Name);
 #else
-            var timer = new System.Timers.Timer(30000.0);
-            timer.AutoReset = false;
+            _shutdownTimer?.Dispose();
+            _shutdownTimer = new System.Timers.Timer(30000.0);
+            _shutdownTimer.AutoReset = false;
 
             NotifyIcon.ShowBalloonTip(5000, "", $"The action \"{SteamShutdown.ActiveMode.Name}\" will be executed in 30 seconds.{Environment.NewLine}Quit to abort.", ToolTipIcon.Info);
 
             var modeToExecute = SteamShutdown.ActiveMode;
-            timer.Elapsed += (o, e) => modeToExecute.Execute();
-            timer.Start();
+            _shutdownTimer.Elapsed += (o, e) => modeToExecute.Execute();
+            _shutdownTimer.Start();
             SteamShutdown.Log("Started timer for action.");
 #endif
         }
@@ -190,6 +196,7 @@ namespace SteamShutdown
         protected override void Dispose(bool disposing)
         {
             if (disposing && components != null) { components.Dispose(); }
+            if (disposing) { _shutdownTimer?.Dispose(); }
         }
 
         /// <summary>
@@ -197,6 +204,7 @@ namespace SteamShutdown
         /// </summary>
         protected override void ExitThreadCore()
         {
+            RPC.Stop();
             NotifyIcon.Visible = false; // should remove lingering tray icon
             base.ExitThreadCore();
         }
