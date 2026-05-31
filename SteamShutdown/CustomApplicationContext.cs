@@ -39,7 +39,10 @@ namespace SteamShutdown
                 bool doShutdown = SteamShutdown.WatchedGames.All(x => !x.IsDownloading);
 
                 if (doShutdown)
+                {
+                    SteamShutdown.WatchedGames.Clear();
                     Shutdown();
+                }
             }
 
             if (e.AppInfo.IsDownloading && !SteamShutdown.WatchedGames.Contains(e.AppInfo))
@@ -132,8 +135,8 @@ namespace SteamShutdown
             if (clickAction != null)
                 item.Click += (o, e) => clickAction(o, e);
 
-            if (isChecked)
-                ((ToolStripMenuItem)item).Checked = true;
+            if (isChecked && item is ToolStripMenuItem menuItem)
+                menuItem.Checked = true;
 
             return item;
         }
@@ -197,6 +200,7 @@ namespace SteamShutdown
         /// </summary>
         protected override void ExitThreadCore()
         {
+            RPC.Stop();
             NotifyIcon.Visible = false; // should remove lingering tray icon
             base.ExitThreadCore();
         }

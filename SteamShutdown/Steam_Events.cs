@@ -17,12 +17,18 @@ namespace SteamShutdown
 
         static void OnAppInfoChanged(object sender, AppInfoChangedEventArgs e)
         {
-            AppInfoChanged?.Invoke(sender, e);
+            if (_syncContext != null)
+                _syncContext.Post(_ => AppInfoChanged?.Invoke(sender, e), null);
+            else
+                AppInfoChanged?.Invoke(sender, e);
         }
 
         static void OnAppInfoDeleted(object sender, AppInfoEventArgs e)
         {
-            AppInfoDeleted?.Invoke(sender, e);
+            if (_syncContext != null)
+                _syncContext.Post(_ => AppInfoDeleted?.Invoke(sender, e), null);
+            else
+                AppInfoDeleted?.Invoke(sender, e);
         }
 
 
@@ -95,24 +101,29 @@ namespace SteamShutdown
             dynamic newJson = JsonConvert.DeserializeObject(json);
             int newID = JsonToAppInfo(newJson).ID;
 
-            // Search for changed app, if null it's a new app
-            App info = Apps.FirstOrDefault(x => x.ID == newID);
+            App info;
             AppInfoChangedEventArgs eventArgs;
 
-            if (info != null) // Download state changed
+            lock (_appsLock)
             {
-                eventArgs = new AppInfoChangedEventArgs(info, info.State);
-                // Only update existing AppInfo
-                info.State = int.Parse(newJson.StateFlags.ToString());
-                SteamShutdown.Log("Download state changed: " + info.Name + " " + info.State + " IsDownloading: " + info.IsDownloading);
-            }
-            else // New download started
-            {
-                // Add new AppInfo
-                info = JsonToAppInfo(newJson);
-                Apps.Add(info);
-                eventArgs = new AppInfoChangedEventArgs(info, -1);
-                SteamShutdown.Log("New download started: " + info.Name + " " + info.State + " IsDownloading: " + info.IsDownloading);
+                // Search for changed app, if null it's a new app
+                info = _apps.FirstOrDefault(x => x.ID == newID);
+
+                if (info != null) // Download state changed
+                {
+                    eventArgs = new AppInfoChangedEventArgs(info, info.State);
+                    // Only update existing AppInfo
+                    info.State = int.Parse(newJson.StateFlags.ToString());
+                    SteamShutdown.Log("Download state changed: " + info.Name + " " + info.State + " IsDownloading: " + info.IsDownloading);
+                }
+                else // New download started
+                {
+                    // Add new AppInfo
+                    info = JsonToAppInfo(newJson);
+                    _apps.Add(info);
+                    eventArgs = new AppInfoChangedEventArgs(info, -1);
+                    SteamShutdown.Log("New download started: " + info.Name + " " + info.State + " IsDownloading: " + info.IsDownloading);
+                }
             }
 
             OnAppInfoChanged(info, eventArgs);
@@ -120,7 +131,7 @@ namespace SteamShutdown
 
         private static void Fsw_Changed(object sender, FileSystemEventArgs e)
         {
-            SteamShutdown.Log("UpdateAppInfo: " + e.FullPath + " Changetype: " + e.ChangeType);
+            SteamShutdown.Log("Fsw_Changed: " + e.FullPath + " Changetype: " + e.ChangeType);
 
             UpdateAppInfo(e.FullPath);
         }

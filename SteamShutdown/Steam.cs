@@ -7,6 +7,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Windows.Forms;
 
 namespace SteamShutdown
@@ -16,7 +17,11 @@ namespace SteamShutdown
         static readonly Regex singleLine = new Regex("^(\\t+\".+\")\\t\\t(\".*\")$", RegexOptions.Compiled);
         static readonly Regex startOfObject = new Regex("^\\t+\".+\"$", RegexOptions.Compiled);
 
-        public static List<App> Apps { get; private set; } = new List<App>();
+        private static readonly object _appsLock = new object();
+        private static List<App> _apps = new List<App>();
+        public static List<App> Apps { get { lock (_appsLock) { return new List<App>(_apps); } } }
+
+        private static SynchronizationContext _syncContext;
 
         static readonly List<FileSystemWatcher> fswList;
 
@@ -24,8 +29,15 @@ namespace SteamShutdown
 
         static Steam()
         {
+            _syncContext = SynchronizationContext.Current;
             string steamRegistryPath = GetSteamRegistryPath();
             var rg = Registry.LocalMachine.OpenSubKey(steamRegistryPath, true);
+            if (rg == null)
+            {
+                MessageBox.Show("Steam is not installed.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                Environment.Exit(0);
+                return;
+            }
             string installationPath = rg.GetValue(STEAM_REG_VALUE, null) as string;
             if (installationPath == null)
             {
@@ -39,20 +51,25 @@ namespace SteamShutdown
             {
                 var key = Path.Combine(steamRegistryPath, STEAM_REG_VALUE);
 
-                // TODO: change to YesNoCancel
                 DialogResult mb = MessageBox.Show("Seems a registry value is wrong, probably because of moving Steam to another location." + Environment.NewLine
                     + $"I can try to fix that for you. For that I will delete this registry value: {key}" + Environment.NewLine
                     + "You have to restart Steam afterwards since this will set the correct value for this registry value." + Environment.NewLine
                     + Environment.NewLine
                     + "If you click \"Yes\", the registry value will be deleted and SteamShutdown closed. Then restart Steam first before opening SteamShutdown again." + Environment.NewLine
-                    + "If you click \"No\", you can select the installation path by yourself.",
+                    + "If you click \"No\", you can select the installation path by yourself." + Environment.NewLine
+                    + "If you click \"Cancel\", SteamShutdown will be closed.",
                     "Error",
-                    MessageBoxButtons.YesNo,
+                    MessageBoxButtons.YesNoCancel,
                     MessageBoxIcon.Question);
+
+                if (mb == DialogResult.Cancel)
+                {
+                    Environment.Exit(0);
+                }
 
                 if (mb == DialogResult.Yes)
                 {
-                    rg.DeleteValue("InstallPath");
+                    rg.DeleteValue(STEAM_REG_VALUE);
                     Environment.Exit(0);
                 }
 
@@ -128,9 +145,10 @@ namespace SteamShutdown
         public static int IdFromAcfFilename(string filename)
         {
             string filenameWithoutExtension = Path.GetFileNameWithoutExtension(filename);
-
             int loc = filenameWithoutExtension.IndexOf('_');
-            return int.Parse(filenameWithoutExtension.Substring(loc + 1));
+            if (loc < 0 || !int.TryParse(filenameWithoutExtension.Substring(loc + 1), out int id))
+                return -1;
+            return id;
         }
 
         private static void UpdateAppInfos(IEnumerable<string> libraryPaths)
@@ -163,7 +181,7 @@ namespace SteamShutdown
             }
 
 
-            Apps = appInfos.OrderBy(x => x.Name).ToList();
+            lock (_appsLock) { _apps = appInfos.OrderBy(x => x.Name).ToList(); }
         }
 
         public static App FileToAppInfo(string filename)

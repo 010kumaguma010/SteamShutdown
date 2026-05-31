@@ -7,6 +7,7 @@ namespace SteamShutdown
     static class RPC
     {
         const string address = "net.pipe://localhost/SteamShutdown/ShowBalloonTip";
+        private static ServiceHost _serviceHost;
 
         public static void ShowAnInstanceIsRunning()
         {
@@ -19,9 +20,15 @@ namespace SteamShutdown
         public static void StartServer()
         {
             NetNamedPipeBinding binding = new NetNamedPipeBinding(NetNamedPipeSecurityMode.None);
-            ServiceHost serviceHost = new ServiceHost(typeof(IPCBubbleServer));
-            serviceHost.AddServiceEndpoint(typeof(IBubbleContract), binding, address);
-            serviceHost.Open();
+            _serviceHost = new ServiceHost(typeof(IPCBubbleServer));
+            _serviceHost.AddServiceEndpoint(typeof(IBubbleContract), binding, address);
+            _serviceHost.Open();
+        }
+
+        public static void Stop()
+        {
+            _serviceHost?.Close();
+            _serviceHost = null;
         }
     }
 
