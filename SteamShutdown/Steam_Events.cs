@@ -98,8 +98,33 @@ namespace SteamShutdown
                 return;
             }
 
-            dynamic newJson = JsonConvert.DeserializeObject(json);
-            int newID = JsonToAppInfo(newJson).ID;
+            dynamic newJson;
+            try
+            {
+                newJson = JsonConvert.DeserializeObject(json);
+            }
+            catch (JsonException ex)
+            {
+                SteamShutdown.Log($"UpdateAppInfo: JSON parse error: {ex.Message}");
+                return;
+            }
+
+            if (newJson == null)
+            {
+                SteamShutdown.Log("UpdateAppInfo: Parsed JSON was null");
+                return;
+            }
+
+            int newID;
+            try
+            {
+                newID = JsonToAppInfo(newJson).ID;
+            }
+            catch (Exception ex)
+            {
+                SteamShutdown.Log($"UpdateAppInfo: Cannot read app ID: {ex.Message}");
+                return;
+            }
 
             App info;
             AppInfoChangedEventArgs eventArgs;

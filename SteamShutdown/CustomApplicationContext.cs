@@ -141,19 +141,22 @@ namespace SteamShutdown
             return item;
         }
 
+        private System.Timers.Timer _shutdownTimer;
+
         private void Shutdown()
         {
 #if DEBUG
             MessageBox.Show(SteamShutdown.ActiveMode.Name);
 #else
-            var timer = new System.Timers.Timer(30000.0);
-            timer.AutoReset = false;
+            _shutdownTimer?.Dispose();
+            _shutdownTimer = new System.Timers.Timer(30000.0);
+            _shutdownTimer.AutoReset = false;
 
             NotifyIcon.ShowBalloonTip(5000, "", $"The action \"{SteamShutdown.ActiveMode.Name}\" will be executed in 30 seconds.{Environment.NewLine}Quit to abort.", ToolTipIcon.Info);
 
             var modeToExecute = SteamShutdown.ActiveMode;
-            timer.Elapsed += (o, e) => modeToExecute.Execute();
-            timer.Start();
+            _shutdownTimer.Elapsed += (o, e) => modeToExecute.Execute();
+            _shutdownTimer.Start();
             SteamShutdown.Log("Started timer for action.");
 #endif
         }
@@ -193,6 +196,7 @@ namespace SteamShutdown
         protected override void Dispose(bool disposing)
         {
             if (disposing && components != null) { components.Dispose(); }
+            if (disposing) { _shutdownTimer?.Dispose(); }
         }
 
         /// <summary>

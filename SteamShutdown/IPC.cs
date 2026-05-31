@@ -27,8 +27,19 @@ namespace SteamShutdown
 
         public static void Stop()
         {
-            _serviceHost?.Close();
-            _serviceHost = null;
+            if (_serviceHost == null) return;
+            try
+            {
+                _serviceHost.Close();
+            }
+            catch
+            {
+                _serviceHost.Abort();
+            }
+            finally
+            {
+                _serviceHost = null;
+            }
         }
     }
 

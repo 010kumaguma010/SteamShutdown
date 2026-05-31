@@ -204,7 +204,7 @@ namespace SteamShutdown
             {
                 stuff = JsonConvert.DeserializeObject(json);
             }
-            catch (JsonSerializationException ex)
+            catch (JsonException ex)
             {
                 SteamShutdown.Log($"FileToAppInfo: Failed to deserialize {filename}");
                 SteamShutdown.Log(ex.ToString());
@@ -220,20 +220,33 @@ namespace SteamShutdown
                 return null;
             }
 
-            App ai = JsonToAppInfo(stuff);
-            return ai;
+            try
+            {
+                return JsonToAppInfo(stuff);
+            }
+            catch (Exception ex)
+            {
+                SteamShutdown.Log($"FileToAppInfo: Failed to map app info from {filename}: {ex.Message}");
+                return null;
+            }
         }
 
         private static App JsonToAppInfo(dynamic json)
         {
-            App newInfo = new App
-            {
-                ID = int.Parse((json.appid ?? json.appID ?? json.AppID).ToString()),
-                Name = json.name ?? json.installdir,
-                State = int.Parse(json.StateFlags.ToString())
-            };
+            var appIdRaw = json?.appid ?? json?.appID ?? json?.AppID;
+            var stateFlagsRaw = json?.StateFlags;
 
-            return newInfo;
+            if (appIdRaw == null)
+                throw new InvalidOperationException("Required field 'appid' missing from app manifest.");
+            if (stateFlagsRaw == null)
+                throw new InvalidOperationException("Required field 'StateFlags' missing from app manifest.");
+
+            return new App
+            {
+                ID = int.Parse(appIdRaw.ToString()),
+                Name = json.name ?? json.installdir,
+                State = int.Parse(stateFlagsRaw.ToString())
+            };
         }
 
         private static string AcfToJson(string[] acfLines)
@@ -317,10 +330,11 @@ namespace SteamShutdown
 
         private static string[] GetLibraryPaths(string installationPath)
         {
-            var paths = new List<string>()
-                {
-                    Path.Combine(installationPath, "SteamApps")
-                };
+            var paths = new List<string>();
+
+            string primarySteamApps = Path.Combine(installationPath, "SteamApps");
+            if (Directory.Exists(primarySteamApps))
+                paths.Add(primarySteamApps);
 
             string libraryFoldersPath = Path.Combine(installationPath, "SteamApps", "libraryfolders.vdf");
             if (!File.Exists(libraryFoldersPath))
